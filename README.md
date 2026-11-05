@@ -405,6 +405,14 @@ npm run snapshot:demo   # capture a finished run as fixtures/demo-run.json
 
 Without the worker, uploads queue but never progress.
 
+### Without Docker
+
+Any Postgres 16+ with the `pgvector` extension works in place of the `db` container (on
+Ubuntu: `apt install postgresql-16-pgvector`). Create a `setu` superuser and database on port
+5433 (or change `DATABASE_URL` in `.env`), then run `npm run dev` and `npm run worker` as above.
+For the demo, `npm run index` must succeed before `npm run seed:demo` — the stored run cites the
+indexed fixture system, and `seed:demo` now says so instead of failing on a foreign key.
+
 ## Measured quality
 
 | | |

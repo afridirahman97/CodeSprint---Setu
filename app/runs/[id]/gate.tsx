@@ -57,7 +57,8 @@ export function Gate({ runId, undecided, approved, approvedBy, approvedAt, canAp
           </div>
         ) : (
           <Button className="mt-3" size="sm" disabled={blocked}
-                  title={blocked ? 'Every finding must be decided first' : undefined}
+                  title={!canApprove ? 'Only a BA can approve the requirements'
+                    : undecided > 0 ? 'Every finding must be decided first' : undefined}
                   onClick={() => setConfirming(true)}>
             Approve requirements
           </Button>

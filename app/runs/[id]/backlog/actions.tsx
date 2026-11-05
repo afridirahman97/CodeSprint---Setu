@@ -1,7 +1,7 @@
 'use client'
 import { useTransition, useState } from 'react'
-import { Sparkles } from 'lucide-react'
-import { startGeneration, approveBacklog } from '@/lib/actions/backlog.ts'
+import { Check, Sparkles } from 'lucide-react'
+import { startGeneration, approveBacklog, acceptPendingForStory } from '@/lib/actions/backlog.ts'
 import { Button } from '@/components/ui/button.tsx'
 
 export function GenerateButton({ runId, label }: { runId: number; label: string }) {
@@ -32,5 +32,28 @@ export function ApproveBacklog({ runId, pendingCount }: { runId: number; pending
       {pendingCount > 0 && <span className="text-sm opacity-60">{pendingCount} item{pendingCount === 1 ? '' : 's'} undecided</span>}
       {error && <p role="alert" className="w-full text-sm text-[var(--color-error)]">{error}</p>}
     </div>
+  )
+}
+
+/** One click for the items a reviewer has read and has no objection to. */
+export function AcceptRemaining({ storyId, kinds, count }: {
+  storyId: number; kinds: ('stories' | 'tasks' | 'test_scenarios')[]; count: number
+}) {
+  const [pending, start] = useTransition()
+  const [error, setError] = useState<string>()
+  if (count === 0) return null
+  return (
+    <>
+      <Button size="sm" variant="outline" className="h-6 gap-1 px-2 text-xs" disabled={pending}
+              title="Accept every undecided item in this story. Items you already decided are kept."
+              onClick={() => start(async () => {
+                try { await acceptPendingForStory(storyId, kinds); setError(undefined) }
+                catch (e) { setError((e as Error).message) }
+              })}>
+        <Check className="h-3 w-3" aria-hidden />
+        {pending ? 'Accepting…' : `Accept remaining ${count}`}
+      </Button>
+      {error && <span role="alert" className="text-xs text-[var(--color-error)]">{error}</span>}
+    </>
   )
 }

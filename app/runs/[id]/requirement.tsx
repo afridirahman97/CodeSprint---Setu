@@ -11,6 +11,7 @@ export function RequirementText({ id, aiOriginal, editedText, locked }: {
   const [pending, start] = useTransition()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(editedText ?? aiOriginal)
+  const [error, setError] = useState<string>()
   const edited = editedText !== null && editedText !== aiOriginal
 
   if (editing) {
@@ -18,13 +19,17 @@ export function RequirementText({ id, aiOriginal, editedText, locked }: {
       <div className="mb-3">
         <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={3} />
         <div className="mt-2 flex gap-2">
-          <Button size="sm" disabled={pending}
-                  onClick={() => start(async () => { await editRequirement(id, draft); setEditing(false) })}>
-            Save
+          <Button size="sm" disabled={pending || !draft.trim()}
+                  onClick={() => start(async () => {
+                    try { await editRequirement(id, draft); setError(undefined); setEditing(false) }
+                    catch (e) { setError((e as Error).message) }
+                  })}>
+            {pending ? 'Saving…' : 'Save'}
           </Button>
           <Button size="sm" variant="ghost" disabled={pending}
-                  onClick={() => { setDraft(editedText ?? aiOriginal); setEditing(false) }}>Cancel</Button>
+                  onClick={() => { setDraft(editedText ?? aiOriginal); setError(undefined); setEditing(false) }}>Cancel</Button>
         </div>
+        {error && <p role="alert" className="mt-2 text-xs text-[var(--color-error)]">{error}</p>}
       </div>
     )
   }

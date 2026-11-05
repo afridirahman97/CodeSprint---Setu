@@ -20,6 +20,7 @@ export default async function Run(
 ) {
   const user = await requireUser()
   const runId = Number((await params).id)
+  if (!Number.isSafeInteger(runId) || runId < 1) notFound()
 
   const [run] = await sql<any[]>`
     SELECT r.*, d.filename FROM runs r JOIN documents d ON d.id = r.document_id WHERE r.id = ${runId}`

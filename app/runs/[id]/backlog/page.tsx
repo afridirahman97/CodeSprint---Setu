@@ -10,7 +10,7 @@ import { DemoBanner } from '@/app/demo-banner.tsx'
 import { PendingFilter } from '@/components/pending-filter.tsx'
 import { pendingFor } from '@/lib/pending.ts'
 import { Artifact } from './artifact.tsx'
-import { GenerateButton, ApproveBacklog } from './actions.tsx'
+import { GenerateButton, ApproveBacklog, AcceptRemaining } from './actions.tsx'
 import { generationStalled } from '@/lib/model/stalled.ts'
 
 export const dynamic = 'force-dynamic'
@@ -20,6 +20,7 @@ export default async function Backlog(
 ) {
   const user = await requireUser()
   const runId = Number((await params).id)
+  if (!Number.isSafeInteger(runId) || runId < 1) notFound()
   const [run] = await sql<any[]>`
     SELECT r.*, d.filename, u.name AS backlog_approver
     FROM runs r JOIN documents d ON d.id = r.document_id
@@ -67,6 +68,11 @@ export default async function Backlog(
       : { pending: pending.backlog, total: rows.filter((r) => r.story_id).length + tasks.length + tests.length,
           noun: 'backlog items' }
   const undecided = (x: { status: string }) => x.status === 'proposed'
+  const locked = !!run.backlog_approved_at
+  // "Accept remaining" covers exactly what this view shows and counts.
+  const bulkKinds = view === 'tasks' ? ['tasks' as const]
+    : view === 'tests' ? ['test_scenarios' as const]
+    : ['stories' as const, 'tasks' as const, 'test_scenarios' as const]
 
   return (
     <AppShell user={user} runId={runId}>
@@ -148,9 +154,15 @@ export default async function Backlog(
                   {storyPending > 0
                     ? <Badge variant="warning" title="still need a decision">{storyPending} pending</Badge>
                     : <Badge variant="success">decided</Badge>}
+                  {!locked && (
+                    <span className="ml-auto flex items-center gap-2">
+                      <AcceptRemaining storyId={r.story_id} kinds={bulkKinds} count={storyPending} />
+                    </span>
+                  )}
                 </div>
                 <Artifact kind="stories" id={r.story_id} text={r.s_edit ?? r.s_orig}
-                          aiOriginal={r.s_orig} status={r.s_status} className="text-lg font-semibold" />
+                          aiOriginal={r.s_orig} status={r.s_status} className="text-lg font-semibold"
+                          locked={locked} />
 
                 {view !== 'tasks' && (r.criteria ?? []).length > 0 && (
                   <ul className="mt-2 grid gap-1 text-sm">
@@ -173,9 +185,9 @@ export default async function Backlog(
                     <div className="divide-y divide-[var(--color-border)]">
                       {st.map((t) => (
                         <Artifact key={t.id} kind="tasks" id={t.id} text={t.edited_text ?? t.ai_original}
-                                  aiOriginal={t.ai_original} status={t.status}
+                                  aiOriginal={t.ai_original} status={t.status} locked={locked}
                                   meta={<span className="ml-1 inline-flex flex-wrap gap-1 align-middle">
-                                    {[...(t.modules ?? []), ...(t.tables ?? [])].map((m: string) => (
+                                    {[...new Set<string>([...(t.modules ?? []), ...(t.tables ?? [])])].map((m) => (
                                       <code key={m} className="badge badge-ghost badge-sm font-mono">{m}</code>
                                     ))}
                                   </span>} />
@@ -195,15 +207,15 @@ export default async function Backlog(
                     <div className="divide-y divide-[var(--color-border)]">
                       {sc.map((t) => (
                         <Artifact key={t.id} kind="test_scenarios" id={t.id} text={t.edited_text ?? t.ai_original}
-                                  aiOriginal={t.ai_original} status={t.status}
-                                  meta={<>
-                                    <Badge variant={t.kind === 'negative' ? 'warning' : 'secondary'} className="ml-1">{t.kind}</Badge>
+                                  aiOriginal={t.ai_original} status={t.status} locked={locked}
+                                  meta={<span>
+                                    <Badge key="kind" variant={t.kind === 'negative' ? 'warning' : 'secondary'} className="ml-1">{t.kind}</Badge>
                                     {t.from_finding_id && (
-                                      <Badge variant="info" className="ml-1" title={t.gap_question ?? ''}>
+                                      <Badge key="gap" variant="info" className="ml-1" title={t.gap_question ?? ''}>
                                         covers a reviewed gap
                                       </Badge>
                                     )}
-                                  </>} />
+                                  </span>} />
                       ))}
                     </div>
                   </section>

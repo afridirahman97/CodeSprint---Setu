@@ -16,6 +16,12 @@ const STATUS: Record<string, 'default' | 'secondary' | 'destructive' | 'success'
   extracting: 'warning', indexing: 'warning', analyzing: 'warning', generating: 'warning',
 }
 
+const IN_FLIGHT = ['extracting', 'indexing', 'analyzing', 'generating']
+const LABEL: Record<string, string> = {
+  extracting: 'extracting', indexing: 'indexing', analyzing: 'analysing', review: 'in review',
+  approved: 'approved', generating: 'generating', ready: 'backlog ready', failed: 'failed',
+}
+
 export default async function Runs() {
   const user = await requireUser()
   const runs = await sql<any[]>`
@@ -31,8 +37,12 @@ export default async function Runs() {
     FROM runs r JOIN documents d ON d.id = r.document_id
     ORDER BY r.id DESC LIMIT 25`
 
+  // Keep the list live while anything is still being analysed or generated.
+  const inFlight = runs.some((r) => IN_FLIGHT.includes(r.status) || r.stage === 'queued')
+
   return (
     <AppShell user={user}>
+      {inFlight && <meta httpEquiv="refresh" content="5" />}
       <h1 className="mb-4 text-2xl font-semibold">Runs</h1>
       <div className="mb-6">
         <ModelGate role={user.role}>
@@ -45,7 +55,7 @@ export default async function Runs() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-24">Run</TableHead>
+                <TableHead className="w-32">Run</TableHead>
                 <TableHead>Document</TableHead>
                 <TableHead className="w-64">Status</TableHead>
                 <TableHead className="w-24 text-right">Findings</TableHead>
@@ -56,13 +66,22 @@ export default async function Runs() {
               {runs.map((r) => (
                 <TableRow key={r.id}>
                   <TableCell>
-                    <Link href={`/runs/${r.id}`} className="link link-primary font-medium">#{r.id}</Link>
-                    {r.is_demo && <Badge variant="info" className="ml-2">stored</Badge>}
+                    <div className="flex items-center gap-2 whitespace-nowrap">
+                      <Link href={`/runs/${r.id}`} className="link link-primary font-medium">#{r.id}</Link>
+                      {r.is_demo && <Badge variant="info">stored</Badge>}
+                    </div>
                   </TableCell>
-                  <TableCell className="font-mono text-xs">{r.filename}</TableCell>
                   <TableCell>
-                    <Badge variant={STATUS[r.status] ?? 'secondary'}>{r.status}</Badge>
-                    {r.stage && (
+                    <Link href={`/runs/${r.id}`} className="font-mono text-xs hover:underline">{r.filename}</Link>
+                    {r.started_at && (
+                      <div className="mt-0.5 text-xs opacity-50">{new Date(r.started_at).toLocaleString()}</div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={r.stage === 'queued' ? 'secondary' : STATUS[r.status] ?? 'secondary'}>
+                      {r.stage === 'queued' ? 'queued' : LABEL[r.status] ?? r.status}
+                    </Badge>
+                    {r.stage && r.stage !== 'queued' && (
                       <div className="mt-1 text-xs opacity-60">
                         {r.stage}
                         {r.progress_total > 0 && ` — ${r.progress_done}/${r.progress_total}`}

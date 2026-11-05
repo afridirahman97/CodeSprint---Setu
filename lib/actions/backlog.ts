@@ -36,6 +36,7 @@ export async function decideArtifact(kind: Kind, id: number, patch: {
   const [before] = await sql.unsafe(
     `SELECT id, run_id, status, edited_text FROM ${t} WHERE id = $1`, [id]) as any[]
   if (!before) throw new Error('not found')
+  await assertBacklogOpen(before.run_id)
 
   await sql.unsafe(
     `UPDATE ${t} SET status = $1, edited_text = $2, decided_by = $3, decided_at = now() WHERE id = $4`,
@@ -47,6 +48,42 @@ export async function decideArtifact(kind: Kind, id: number, patch: {
                 before: { status: before.status, edited_text: before.edited_text },
                 after: { status: patch.status ?? before.status, edited_text: patch.editedText } })
   revalidatePath(`/runs/${before.run_id}/backlog`)
+}
+
+/** Approval fixes the backlog: what was exported and pushed is exactly what was signed off. */
+async function assertBacklogOpen(runId: number) {
+  const [run] = await sql<any[]>`SELECT backlog_approved_at FROM runs WHERE id = ${runId}`
+  if (!run) throw new Error('run not found')
+  if (run.backlog_approved_at) throw new Error('The backlog is approved. Its items can no longer be changed.')
+}
+
+/**
+ * Accept every still-undecided item under one story — the story itself and/or its tasks and
+ * tests, as chosen. Items already accepted, edited or dropped are left exactly as they are,
+ * and each acceptance is audited like a single one.
+ */
+export async function acceptPendingForStory(storyId: number, kinds: Kind[]) {
+  const user = await requireUser()
+  const [story] = await sql<any[]>`SELECT id, run_id FROM stories WHERE id = ${storyId}`
+  if (!story) throw new Error('story not found')
+  await assertBacklogOpen(story.run_id)
+
+  const accepted: { kind: Kind; id: number }[] = []
+  await sql.begin(async (tx) => {
+    for (const kind of kinds) {
+      const where = kind === 'stories' ? 'id = $1' : 'story_id = $1'
+      const rows = await tx.unsafe(
+        `UPDATE ${TABLE[kind]} SET status = 'accepted', decided_by = $2, decided_at = now()
+         WHERE ${where} AND status = 'proposed' RETURNING id`, [storyId, user.id]) as any[]
+      rows.forEach((r) => accepted.push({ kind, id: Number(r.id) }))
+    }
+  })
+  for (const a of accepted) {
+    await audit({ actorId: user.id, action: `${a.kind}:decide`, entityType: a.kind, entityId: a.id,
+                  before: { status: 'proposed' }, after: { status: 'accepted', bulk: true } })
+  }
+  revalidatePath(`/runs/${story.run_id}/backlog`)
+  return accepted.length
 }
 
 /** D27: the interval that matters ends here, not at SRS sign-off. */

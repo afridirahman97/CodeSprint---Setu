@@ -38,9 +38,9 @@ export function Finding({ f, canDismiss, locked }: {
   const [note, setNote] = useState(f.resolution_note ?? '')
   const [error, setError] = useState<string>()
 
-  const act = (d: Parameters<typeof decideFinding>[0]) =>
+  const act = (d: Parameters<typeof decideFinding>[0], then?: () => void) =>
     start(async () => {
-      try { await decideFinding(d); setError(undefined) }
+      try { await decideFinding(d); setError(undefined); then?.() }
       catch (e) { setError((e as Error).message) }
     })
 
@@ -99,9 +99,10 @@ export function Finding({ f, canDismiss, locked }: {
           <span className="text-xs opacity-60">Approved — decisions are fixed.</span>
         ) : editing ? (
           <>
-            <Button size="sm" disabled={pending}
-                    onClick={() => { act({ findingId: f.id, status: 'edited', editedText: draft }); setEditing(false) }}>
-              Save
+            <Button size="sm" disabled={pending || !draft.trim()}
+                    onClick={() => act({ findingId: f.id, status: 'edited', editedText: draft.trim() },
+                                       () => setEditing(false))}>
+              {pending ? 'Saving…' : 'Save'}
             </Button>
             <Button size="sm" variant="ghost" disabled={pending}
                     onClick={() => { setDraft(f.edited_text ?? f.ai_original); setEditing(false) }}>
@@ -110,14 +111,17 @@ export function Finding({ f, canDismiss, locked }: {
           </>
         ) : (
           <>
-            <Button size="sm" variant="outline" disabled={pending}
+            <Button size="sm" variant={f.status === 'accepted' ? 'default' : 'outline'} disabled={pending}
+                    aria-pressed={f.status === 'accepted'}
                     onClick={() => act({ findingId: f.id, status: 'accepted' })}>
-              <Check className="h-3.5 w-3.5" aria-hidden /> Accept
+              <Check className="h-3.5 w-3.5" aria-hidden /> {f.status === 'accepted' ? 'Accepted' : 'Accept'}
             </Button>
-            <Button size="sm" variant="ghost" disabled={pending} onClick={() => setEditing(true)}>
+            <Button size="sm" variant={f.status === 'edited' ? 'secondary' : 'ghost'} disabled={pending}
+                    aria-pressed={f.status === 'edited'} onClick={() => setEditing(true)}>
               <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
             </Button>
-            <Button size="sm" variant="ghost" disabled={pending || !canDismiss}
+            <Button size="sm" variant={f.status === 'dismissed' ? 'secondary' : 'ghost'}
+                    disabled={pending || !canDismiss} aria-pressed={f.status === 'dismissed'}
                     title={canDismiss ? undefined : 'Only a BA can dismiss a finding'}
                     onClick={() => act({ findingId: f.id, status: 'dismissed' })}>
               <X className="h-3.5 w-3.5" aria-hidden /> Dismiss
@@ -130,12 +134,12 @@ export function Finding({ f, canDismiss, locked }: {
           <span className="opacity-70">Worth asking the client?</span>
           <div className="join">
             <button className={cn('btn btn-xs join-item', f.ba_verdict === 'valid' && 'btn-success')}
-                    disabled={pending} aria-pressed={f.ba_verdict === 'valid'}
+                    disabled={pending || locked} aria-pressed={f.ba_verdict === 'valid'}
                     onClick={() => act({ findingId: f.id, baVerdict: f.ba_verdict === 'valid' ? null : 'valid' })}>
               Yes
             </button>
             <button className={cn('btn btn-xs join-item', f.ba_verdict === 'invalid' && 'btn-error')}
-                    disabled={pending} aria-pressed={f.ba_verdict === 'invalid'}
+                    disabled={pending || locked} aria-pressed={f.ba_verdict === 'invalid'}
                     onClick={() => act({ findingId: f.id, baVerdict: f.ba_verdict === 'invalid' ? null : 'invalid' })}>
               No
             </button>
@@ -143,18 +147,30 @@ export function Finding({ f, canDismiss, locked }: {
         </div>
       </div>
 
-      <details className="mt-3 text-sm">
-        <summary className="flex cursor-pointer items-center gap-1.5 text-xs opacity-70">
-          <MessageSquare className="h-3.5 w-3.5" aria-hidden />
-          What the client said{f.resolution_note ? ' ✓' : ''}
-        </summary>
-        <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="mt-2"
-                  placeholder="Record the answer, then revise the requirement text above." />
-        <Button size="sm" variant="secondary" className="mt-2" disabled={pending}
-                onClick={() => act({ findingId: f.id, resolutionNote: note })}>
-          Save note
-        </Button>
-      </details>
+      {locked ? (
+        f.resolution_note && (
+          <div className="mt-3 text-sm">
+            <div className="flex items-center gap-1.5 text-xs opacity-70">
+              <MessageSquare className="h-3.5 w-3.5" aria-hidden /> What the client said
+            </div>
+            <p className="mt-1 whitespace-pre-wrap">{f.resolution_note}</p>
+          </div>
+        )
+      ) : (
+        <details className="mt-3 text-sm">
+          <summary className="flex cursor-pointer items-center gap-1.5 text-xs opacity-70">
+            <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+            What the client said{f.resolution_note ? ' ✓' : ''}
+          </summary>
+          <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="mt-2"
+                    placeholder="Record the answer, then revise the requirement text above." />
+          <Button size="sm" variant="secondary" className="mt-2"
+                  disabled={pending || note === (f.resolution_note ?? '')}
+                  onClick={() => act({ findingId: f.id, resolutionNote: note.trim() || null })}>
+            Save note
+          </Button>
+        </details>
+      )}
 
       {error && <p role="alert" className="mt-2 text-xs text-[var(--color-error)]">{error}</p>}
     </div>

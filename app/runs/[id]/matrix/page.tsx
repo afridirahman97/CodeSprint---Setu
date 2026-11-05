@@ -16,6 +16,7 @@ export const dynamic = 'force-dynamic'
 export default async function Matrix({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser()
   const runId = Number((await params).id)
+  if (!Number.isSafeInteger(runId) || runId < 1) notFound()
   const [run] = await sql<any[]>`
     SELECT r.id, r.is_demo, d.filename FROM runs r JOIN documents d ON d.id = r.document_id WHERE r.id = ${runId}`
   if (!run) notFound()
