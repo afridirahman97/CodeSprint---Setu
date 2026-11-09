@@ -47,6 +47,26 @@ docker compose down -v     # stop and delete both — including OmniRoute's prov
 docker compose logs -f app worker
 ```
 
+## Developer projects
+
+Developers get a second flow: point Setu at a **git repository and branch** (remote over HTTPS,
+or a local folder), upload the **final SRS**, and get a per-requirement analysis against that
+code, a development plan, and an `IMPLEMENTATION_PROMPT.md` to hand to a coding assistant. Tuned
+for **Java / Spring Boot**. See [the user guide](docs/USER_GUIDE.md#8-projects--plan-development-against-a-codebase-developer).
+
+- The model never touches git. The **worker** clones the branch (shallow, one branch, into the
+  `setu-repos` volume, deleted after indexing), splits it into pieces and embeds them; prompts
+  carry only the excerpts relevant to each requirement. With a local model, code stays on the
+  server.
+- Tokens are AES-GCM encrypted like the model key and sent as a one-off HTTP header — never in the
+  clone URL or `.git/config`.
+- Local repositories: set `LOCAL_REPOS_DIR` in `.env` to an absolute path; it is mounted
+  read-only at `/repos` in `app` and `worker`.
+- Plans and projects are visible to `dev` and `superadmin` only (`project:use` in
+  `lib/auth/roles.ts`).
+- Code: `lib/projects/` (repo, chunking, indexing, planning, markdown), `lib/ai/devplan.ts`,
+  `app/projects/`, migration `0013_projects.sql`.
+
 ## Deploying on a local network
 
 On a LAN there is no certificate to have, so Setu serves plain HTTP. Set this in `.env`:

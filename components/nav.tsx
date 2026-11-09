@@ -2,10 +2,10 @@
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
-  ClipboardList, Code2, TestTube2, Network, ListChecks, Settings, Activity, Check, Lock,
+  ClipboardList, Code2, TestTube2, Network, ListChecks, Settings, Activity, Check, Lock, FolderGit2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils.ts'
-import type { Role } from '@/lib/auth/roles.ts'
+import { can, type Role } from '@/lib/auth/roles.ts'
 
 export type PendingCounts = {
   findings: number; stories: number; tasks: number; tests: number
@@ -157,6 +157,9 @@ export function TopNav({ role }: { role: Role }) {
   const path = usePathname()
   const links = [
     { href: '/runs', label: 'Runs', icon: ClipboardList, on: path === '/runs' || /^\/runs\/\d+/.test(path) },
+    ...(can(role, 'project:use')
+      ? [{ href: '/projects', label: 'Projects', icon: FolderGit2, on: path.startsWith('/projects') }]
+      : []),
     { href: '/health', label: 'Health', icon: Activity, on: path === '/health' },
     ...(role === 'superadmin'
       ? [{ href: '/settings/model', label: 'Model', icon: Settings, on: path.startsWith('/settings') }]
@@ -182,6 +185,7 @@ export function MobileNav({ role, runId }: { role: Role; runId?: number }) {
   const items = [
     { href: '/runs', label: 'Runs' },
     ...(runId ? phases(runId).flatMap((p) => p.items.map((i) => ({ href: i.href, label: i.label }))) : []),
+    ...(can(role, 'project:use') ? [{ href: '/projects', label: 'Projects' }] : []),
     { href: '/health', label: 'Health' },
     ...(role === 'superadmin' ? [{ href: '/settings/model', label: 'Model settings' }] : []),
   ]

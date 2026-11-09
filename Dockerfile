@@ -12,6 +12,8 @@ RUN npm run build
 FROM node:24-alpine AS run
 WORKDIR /app
 ENV NODE_ENV=production
+# Developer projects clone the repository they are analysed against.
+RUN apk add --no-cache git
 # standalone gives server.js plus a traced node_modules
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static

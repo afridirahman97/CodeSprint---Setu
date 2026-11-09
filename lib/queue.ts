@@ -6,6 +6,10 @@ export const QUEUE = 'setu.run' as const
 export const GENERATE_QUEUE = 'setu.generate' as const
 export type RunJob = { runId: number; documentId: number }
 export type GenerateJob = { runId: number }
+export const INDEX_QUEUE = 'setu.project.index' as const
+export const PLAN_QUEUE = 'setu.devplan' as const
+export type IndexJob = { projectId: number }
+export type PlanJob = { planId: number }
 
 let boss: PgBoss | null = null
 
@@ -35,6 +39,8 @@ export async function getBoss(): Promise<PgBoss> {
   await b.start()
   await ensureQueue(b, QUEUE)
   await ensureQueue(b, GENERATE_QUEUE)
+  await ensureQueue(b, INDEX_QUEUE)
+  await ensureQueue(b, PLAN_QUEUE)
   boss = b
   return b
 }
@@ -51,3 +57,5 @@ async function send(queue: string, data: object): Promise<string> {
 
 export const enqueueRun = (job: RunJob) => send(QUEUE, job)
 export const enqueueGenerate = (job: GenerateJob) => send(GENERATE_QUEUE, job)
+export const enqueueIndex = (job: IndexJob) => send(INDEX_QUEUE, job)
+export const enqueuePlan = (job: PlanJob) => send(PLAN_QUEUE, job)

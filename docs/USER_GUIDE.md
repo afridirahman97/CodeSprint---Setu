@@ -36,6 +36,7 @@ Everyone who is signed in can **read** everything. Only these actions are restri
 | Upload an SRS, dismiss findings, approve requirements, generate and approve the backlog | BA, superadmin |
 | Export (XLSX / DOCX) and Jira push | BA, PM, superadmin |
 | Accept or edit findings, answer "Worth asking the client?", add client notes, revise requirement text, accept/edit/drop backlog items | everyone |
+| **Projects**: create projects, upload a final SRS, read and download development plans | Dev lead, superadmin — the only area other roles cannot see |
 
 The seeded accounts (password printed by `npm run seed`):
 
@@ -179,6 +180,77 @@ Exports (BA, PM, superadmin):
 contacting Jira. A real push must be enabled by an administrator (`JIRA_PUSH_ENABLED=true`) and
 needs an approved backlog.
 
+## 8. Projects — plan development against a codebase (developer)
+
+Once the BA has the client's answers, the developer takes the **final SRS** and checks it against
+the code the work will be built on. Developers land on **Projects**.
+
+### Create a project (once per codebase)
+
+1. **Projects → New project.** Give it a name.
+2. Choose where the code is:
+   - **Remote** — the repository's **HTTPS** URL (GitHub, GitLab, Bitbucket, self-hosted). For a
+     private repository, open *Private repository?* and add a **read-only access token** (GitHub
+     fine-grained token with *Contents: read*; GitLab *read_repository*). Bitbucket also needs the
+     **username**. The token is encrypted and never shown again. SSH URLs are not supported yet.
+   - **Local folder** — any git repository inside the folder shared with Setu (see
+     [Sharing local repositories](#sharing-local-repositories)).
+3. Enter the **branch** development starts from (e.g. `main`, `develop`).
+4. **Create and index.** Setu fetches that branch and builds a searchable index of it: Java/Kotlin
+   classes (an outline per class plus one piece per method), `application*.yml`/`.properties`,
+   `pom.xml`/`build.gradle`, SQL and Liquibase migrations, and Markdown docs. Build output
+   (`target`, `build`, …) is skipped. A medium Spring Boot service takes a minute or two with a
+   local embedding model.
+
+The project page shows the commit that was indexed. After new commits land, click **Re-index**;
+to work from another branch, use **Change branch**. If indexing fails, the previous index is
+kept and the error says why (wrong branch, no access, host unreachable).
+
+### Upload the final SRS
+
+On the project page, **Upload the final SRS** and click **Analyse against code**. Setu extracts
+the requirements, then, for each one, finds the related code and asks the model:
+
+| status | meaning |
+|---|---|
+| **to build** | nothing relevant exists |
+| **to extend** | some of it exists and needs extending |
+| **conflicts** | current code does something the requirement contradicts |
+| **already there** | the code already does it |
+| **unclear** | the code found was not enough to tell |
+
+Each requirement shows what exists today, the **files** to modify or create, ordered **steps**,
+**risks**, **open questions**, and the code it is based on (click a chip to read it). Only code
+that was actually shown to the model can be cited.
+
+A project keeps every plan, so you can upload a revised SRS later and compare.
+
+### Use the plan
+
+- **IMPLEMENTATION_PROMPT.md** — written for a coding assistant (Claude Code, Copilot, Cursor…):
+  how to work in this repository, the plan in build order (conflicts first, then new work, then
+  extensions), every open question, a definition of done, and the relevant code excerpts. Put it
+  in the repository and ask the assistant to follow it, or use **Copy prompt** to paste it.
+- **Development plan (.md)** — the same analysis for people: a summary, every file touched and
+  by which requirement, then each requirement in full.
+
+The plan is drafted from the code at the indexed commit. Treat paths and class names as strong
+hints and verify them — the prompt file tells the assistant the same.
+
+### Sharing local repositories
+
+Setu runs in Docker, so it only sees folders you share with it. In `.env`, set
+`LOCAL_REPOS_DIR` to the **absolute path** of the folder that holds your repositories (Docker
+does not expand `~`):
+
+```
+LOCAL_REPOS_DIR=/home/you/IdeaProjects
+```
+
+then `docker compose up -d`. Each subfolder that is a git repository appears under
+**Local folder**. The folder is mounted read-only; Setu clones the chosen branch from it and
+never writes to your working copy.
+
 ## Demo run
 
 `/demo` opens a stored, already-approved run, so you can walk through the whole flow without a live
@@ -192,6 +264,18 @@ model. A **Stored run** banner marks it. If it says *No stored run*, an administ
 something is blocked.
 
 ## Troubleshooting
+
+Projects:
+
+| symptom | fix |
+|---|---|
+| *That branch does not exist* | branch names are case-sensitive — **Change branch** |
+| *The repository refused access* | private repository: add a token that can read it (**Change branch / token**) |
+| *Could not reach the repository host* | the worker cannot reach it — same DNS/proxy fix as the Docker build |
+| *No local repositories are shared* | set `LOCAL_REPOS_DIR` in `.env` (absolute path), then `docker compose up -d` |
+| Plans cite the wrong code | **Re-index** after new commits; a larger chat model also helps |
+
+Review runs:
 
 | you see | meaning / fix |
 |---|---|

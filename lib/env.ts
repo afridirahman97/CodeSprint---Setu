@@ -19,6 +19,10 @@ export const env = {
   embedDims: Number(process.env.EMBED_DIMS ?? 768),
   databaseUrl: process.env.DATABASE_URL ?? 'postgres://setu:setu@localhost:5433/setu',
   sessionSecret: process.env.SESSION_SECRET ?? 'dev-only-secret-at-least-32-chars-long!',
+  /** Where the worker clones project repositories. A volume in compose. */
+  reposDir: process.env.SETU_REPOS_DIR ?? '/data/repos',
+  /** Host folders mounted read-only for "local repository" projects. */
+  localReposRoot: process.env.SETU_LOCAL_REPOS ?? '/repos',
   jiraPushEnabled: process.env.JIRA_PUSH_ENABLED === 'true',
   jiraBaseUrl: process.env.JIRA_BASE_URL ?? '',
   jiraProjectKey: process.env.JIRA_PROJECT_KEY ?? 'SETU',

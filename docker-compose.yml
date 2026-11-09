@@ -52,6 +52,8 @@ services:
     ports: ["3000:3000"]
     # Lets the container reach a CPU embedder, or a tunnel, bound on the host bridge.
     extra_hosts: ["host.docker.internal:host-gateway"]
+    # Read-only: the app only lists which local repositories exist, for the project form.
+    volumes: ["${LOCAL_REPOS_DIR:-./local-repos}:/repos:ro"]
     depends_on:
       db: { condition: service_healthy }
       # Ordering only: the service name has to resolve before anyone tests the endpoint.
@@ -62,6 +64,11 @@ services:
     command: npx tsx worker/index.ts
     environment: *llm
     extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes:
+      # Scratch space for cloning project repositories; removed after each index.
+      - setu-repos:/data/repos
+      # Local repositories a developer can analyse (Projects -> Local folder). Read-only.
+      - ${LOCAL_REPOS_DIR:-./local-repos}:/repos:ro
     depends_on:
       db: { condition: service_healthy }
       omniroute: { condition: service_started }
@@ -69,3 +76,4 @@ services:
 volumes:
   setu-db:
   omniroute-data:
+  setu-repos:
